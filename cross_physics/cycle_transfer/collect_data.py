@@ -19,9 +19,12 @@ def safe_path(path):
 
 
 class TD3(object):
+    """load a policy and act accordingly. 
+    """
     def __init__(self,policy_path,state_dim,action_dim,max_action):
-        self.actor = Actor(state_dim, action_dim, max_action).cuda()
+        self.actor = Actor(state_dim, action_dim, max_action)#.cuda()  nocuda
         self.weight_path = policy_path
+        print("policy weight path: ", self.weight_path)
         self.actor.load_state_dict(torch.load(self.weight_path))
         print('policy weight loaded!')
         # self.axmodel = Axmodel(opt).cuda()
@@ -30,23 +33,34 @@ class TD3(object):
         # print('axmodel weight loaded!')
 
     def select_action(self, state):
-        state = torch.FloatTensor(state.reshape(1, -1)).cuda()
+        state = torch.FloatTensor(state.reshape(1, -1))#.cuda()
         action = self.actor(state).cpu().data.numpy().flatten()
         return action
 
     def online_action(self,state):
-        state = torch.FloatTensor(state.reshape(1, -1)).cuda()
+        state = torch.FloatTensor(state.reshape(1, -1))#.cuda()
         action = self.axmodel(state,self.actor(state)).cpu().data.numpy().flatten()
         return action
 
     def online_axmodel(self,state,axmodel):
-        state = torch.FloatTensor(state.reshape(1, -1)).cuda()
-        action = axmodel(state,self.actor(state)).cpu().data.numpy().flatten()
+        state = torch.FloatTensor(state.reshape(1, -1))#.cuda()
+        
+        # self.actor(state) produces an action according to the policy. 
+        
+        action = axmodel(state, self.actor(state)).cpu().data.numpy().flatten()
+        
         return action
 
 
 class CycleData:
+    """ helper class to do the following: 
+    1. collect trajectories from domain 
+    2. train forward dynamics model: f(s, a) -> s'
+    3. train inverse dynamics model: f(s, s') -> a
+    4. 
+    """
     def __init__(self, opt):
+        # loads the policy and initialize other variables. 
         self.pair_n = 3000
         self.opt = opt
         self.env = gym.make(opt.env)
@@ -60,6 +74,8 @@ class CycleData:
         self.policy_path = os.path.join(opt.log_root,
                         '{}_base/models/TD3_{}_0_actor'.format(opt.env,opt.env))
         self.policy = TD3(self.policy_path,self.state_dim,self.action_dim,self.max_action)
+        
+        # start collecting data. 
         self.data1 = self.collect(self.opt.data_id)
         print('----------- Dataset initialized ---------------')
         print('-----------------------------------------------')
@@ -68,14 +84,20 @@ class CycleData:
 
         opt.state_dim = self.state_dim
         opt.action_dim = self.action_dim
-        self.model = Forwardmodel(opt).cuda()
+        # initialize and train the forward model. 
+        self.model = Forwardmodel(opt)#.cuda()
         self.train_forward()
         print('-----------------------------------------------')
-        self.inverse_model = Inversemodel(opt).cuda()
+        
+        # initialize and train the inverse model. why do we need it ?
+        self.inverse_model = Inversemodel(opt)#.cuda()
         self.train_inverse()
         print('-----------------------------------------------\n')
 
     def sample(self, batch_size=32):
+        """ sample randomly from collected trajectories. 
+        returns a tuple of length 3: cur-states, actions, next-state. 
+        """
         id1 = random.sample(range(self.sample_n1), batch_size)
         sample1 = (self.to_device(self.data1[0][id1]),
                    self.to_device(self.data1[1][id1]),
@@ -92,6 +114,9 @@ class CycleData:
         self.pos = 0
 
     def sample1(self,batch_size=32):
+        """ this looks a better scheme to generate non-overlapping mini-batches. 
+            but not used. 
+        """
         start = self.pos*batch_size
         end = start+batch_size
         if end>=self.sample_n1:
@@ -105,18 +130,24 @@ class CycleData:
         return sample1
 
     def to_device(self,data):
-        return torch.tensor(data).float().cuda()
+        return torch.tensor(data).float()#.cuda()
 
-    def collect(self, data_id):
+    def collect(self, data_id): # data_id unused. see opt.data_id instead
+        """" collect data according to policy and store 
+        them in numpy arrays. Also returns. 
+        3 numpy  arrays: current states, actions, next states. 
+        """
+        
         self.env_logs = safe_path(os.path.join(self.log_root,'{}_data'.format(self.opt.env)))
-        data_folder = safe_path(os.path.join(self.env_logs,'{}_{}'.format(self.opt.data_type,self.opt.data_id)))
+        data_folder = safe_path(os.path.join(self.env_logs,'{}_{}'.format(self.opt.data_type,
+                                                                          self.opt.data_id)))
         self.data_folder = data_folder
         if not os.path.exists(data_folder):
             os.mkdir(data_folder)
         now_path = os.path.join(data_folder,'now.npy')
         nxt_path = os.path.join(data_folder,'nxt.npy')
         act_path = os.path.join(data_folder,'act.npy')
-        try:
+        try: # check if previous data present. 
             now_obs = np.load(now_path)
             nxt_obs = np.load(nxt_path)
             action = np.load(act_path)
@@ -159,6 +190,8 @@ class CycleData:
         return (now_obs, action, nxt_obs)
 
     def train_forward(self):
+        """train a forward dynamics model. 
+        """
         self.weight_path = os.path.join(self.data_folder, 'forward.pth')
         try:
             self.model.load_state_dict(torch.load(self.weight_path))
@@ -176,7 +209,7 @@ class CycleData:
             elif epoch==20:
                 optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
             for i in (range(self.pair_n)):
-                item = self.sample()
+                item = self.sample() # just use a dataloader! 
                 state, action, result = item
                 out = self.model(state, action)
                 loss = loss_fn(out, result)
@@ -197,6 +230,8 @@ class CycleData:
         print('evaluation loss:{:.7f}'.format(epoch_loss / self.pair_n))
 
     def train_inverse(self):
+        """ train inverse model. 
+        """
         self.inverse_weight_path = os.path.join(self.data_folder, 'inverse.pth')
         try:
             self.inverse_model.load_state_dict(torch.load(self.inverse_weight_path))
@@ -234,13 +269,20 @@ class CycleData:
             epoch_loss += loss.item()
         print('evaluation loss:{:.7f}'.format(epoch_loss / self.pair_n))
 
-
     def online_test(self,axmodel,episode_n=100,imgpath=None):
+        """ rolls out  trajectories/episodes and collects rewards. 
+        Optionally, saves image frames as well. 
+        """
+        print("axmodel: ", axmodel)
+        print(str(axmodel))
+        # what is this axmodel ? 
         save_flag = False
+        
         if imgpath is not None:
             if not os.path.exists(imgpath):
                 os.mkdir(imgpath)
             save_flag = True
+        
         with torch.no_grad():
             now_buffer, action_buffer, nxt_buffer = [], [], []
             reward_buffer = []
@@ -255,9 +297,13 @@ class CycleData:
                         os.mkdir(episode_path)
                 count = 0
                 while not done:
-                    img = self.env.sim.render(mode='offscreen', camera_name='track', width=256, height=256)
+                    img = self.env.sim.render(mode='offscreen', \
+                                             camera_name='track',\
+                                             width=256,\
+                                             height=256)
                     if save_flag:
-                        Image.fromarray(img[::-1, :, :]).save(os.path.join(episode_path, 'img_{}.jpg'.format(count)))
+                        Image.fromarray(img[::-1, :, :]).save(os.path.join(episode_path,\
+                                                             'img_{}.jpg'.format(count)))
                         count += 1
                         print(episode,count)
 
@@ -277,19 +323,41 @@ class CycleData:
             # print('average reward: {:.2f}'.format(episode_r/episode_n))
             return np.array(reward_buffer)
 
-
 if __name__ == '__main__':
+    
     parser = argparse.ArgumentParser(description='control dataset analyzer')
-    parser.add_argument("--env", default="HalfCheetah-v2")
-    parser.add_argument("--force", type=bool, default=True)
-    parser.add_argument("--log_root", default="../../../logs/cross_physics")
-    parser.add_argument('--data_type', type=str, default='arma3', help='data type')
-    parser.add_argument('--data_id', type=int, default=2, help='data id')
-    parser.add_argument('--episode_n', type=int, default=100, help='episode number')
+    
+    parser.add_argument("--env", \
+                        default="HalfCheetah-v2")
+    
+    parser.add_argument("--force", \
+                        type=bool, \
+                        default=True)
+    
+    parser.add_argument("--log_root", \
+                        default="../../../logs/cross_physics")
+    
+    parser.add_argument('--data_type', \
+                        type=str, \
+                        default='arma3', \
+                        help='data type')
+    
+    parser.add_argument('--data_id', \
+                        type=int, \
+                        default=2, \
+                        help='data id')
+    
+    parser.add_argument('--episode_n', \
+                        type=int, \
+                        default=100, \
+                        help='episode number')
+    
     opt = parser.parse_args()
 
     dataset = CycleData(opt)
     item = dataset.sample()
+    
+    # just for printing ? 
     now,act,nxt = item
     print(now.shape,act.shape,nxt.shape)
     print(now.mean().item(),act.mean().item(),nxt.mean().item())

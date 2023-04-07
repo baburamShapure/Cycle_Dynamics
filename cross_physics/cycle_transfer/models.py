@@ -7,6 +7,9 @@ import torch.nn.functional as F
 
 
 def net_init(net):
+    """archaic initialization for linear layers. 
+       people still use this? 
+    """
     for m in net.modules():
         if isinstance(m, nn.Linear):
             nn.init.kaiming_normal_(m.weight)
@@ -14,7 +17,6 @@ def net_init(net):
             # nn.init.normal(m.weight)
             if m.bias is not None:
                 m.bias.data.zero_()
-
 
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action):
@@ -29,8 +31,9 @@ class Actor(nn.Module):
         a = F.relu(self.l2(a))
         return self.max_action * torch.tanh(self.l3(a))
 
-
 class Inversemodel(nn.Module):
+    """ given cur state & next state, what action was applied? 
+    """
     def __init__(self,opt):
         super(Inversemodel,self).__init__()
         self.opt = opt
@@ -49,8 +52,9 @@ class Inversemodel(nn.Module):
         action = self.fc(state)*self.max_action
         return action
 
-
 class Forwardmodel(nn.Module):
+    """given state and action, predict the next state. 
+    """
     def __init__(self,opt):
         super(Forwardmodel,self).__init__()
         self.opt = opt
@@ -77,8 +81,10 @@ class Forwardmodel(nn.Module):
         pred_state = self.fc(state)
         return pred_state
 
-
 class Axmodel(nn.Module):
+    """for learning correspondence. 
+     state X action -> action 
+    """
     def __init__(self,opt):
         super(Axmodel,self).__init__()
         self.opt = opt
@@ -107,8 +113,9 @@ class Axmodel(nn.Module):
         action = self.fc(state)*self.max_action
         return action
 
-
 class Dmodel(nn.Module):
+    """discriminator for state estimation. 
+    """
     def __init__(self,opt):
         super(Dmodel,self).__init__()
         self.opt = opt
@@ -145,7 +152,6 @@ class GANLoss(nn.Module):
     def __call__(self, input, target_is_real):
         target_tensor = self.get_target_tensor(input, target_is_real)
         return self.loss(input, target_tensor)
-
 
 class ImagePool():
     def __init__(self, pool_size):

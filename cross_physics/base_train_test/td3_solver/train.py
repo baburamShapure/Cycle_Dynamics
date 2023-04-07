@@ -3,7 +3,6 @@ import torch
 import gym
 import argparse
 import os
-
 import utils
 import TD3
 
@@ -12,9 +11,11 @@ def safe_path(path):
 		os.mkdir(path)
 	return path
 
-# Runs policy for X episodes and returns average reward
-# A fixed seed is used for the eval environment
+
 def eval_policy(policy, env_name, seed, eval_episodes=10):
+	""" Runs policy for X episodes and returns average reward
+		A fixed seed is used for the eval environment
+	"""
 	eval_env = gym.make(env_name)
 	eval_env.seed(seed + 100)
 
@@ -43,6 +44,7 @@ def main(args):
 	result_path = safe_path(os.path.join(log_path, 'results'))
 	model_path = safe_path(os.path.join(log_path, 'models'))
 
+	print(args.env)
 	env = gym.make(args.env)
 
 	# Set seeds
@@ -53,6 +55,7 @@ def main(args):
 	state_dim = env.observation_space.shape[0]
 	action_dim = env.action_space.shape[0]
 	max_action = float(env.action_space.high[0])
+	print("Max action: ", max_action)
 
 	kwargs = {
 		"state_dim": state_dim,
@@ -122,8 +125,6 @@ def main(args):
 			evaluations.append(eval_policy(policy, args.env, args.seed))
 			np.save(os.path.join(result_path, '{}'.format(file_name)), evaluations)
 			if args.save_model: policy.save(os.path.join(model_path, '{}'.format(file_name)))
-
-
 
 if __name__ == "__main__":
 	

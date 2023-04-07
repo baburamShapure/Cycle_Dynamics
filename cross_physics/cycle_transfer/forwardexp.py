@@ -41,41 +41,64 @@ class Agent():
     def __init__(self,opt):
         self.opt = opt
         self.dataset = CycleData(opt)
-        self.model = self.dataset.model
+        # the forward dynamics model. 
+        self.model = self.dataset.model 
 
 
 class ActionAgent:
+    """ sets up 2 agents from 2 domains and initializes the 
+    respective models. 
+
+    """
     def __init__(self,opt):
         self.opt = opt
         opt.data_type = opt.data_type1
         opt.data_id = opt.data_id1
-        self.agent1 = Agent(opt)
+        # trajectories & fwd mdles on base data. 
+        self.agent1 = Agent(opt) 
         opt.data_type = opt.data_type2
         opt.data_id = opt.data_id2
+        
+        # trajectories & fwd models on modified data. 
         self.agent2 = Agent(opt)
+        
+
         opt.state_dim = self.agent1.dataset.state_dim
         opt.action_dim = self.agent1.dataset.action_dim
         self.env_logs = self.agent1.dataset.env_logs
 
-        self.model = Axmodel(opt).cuda()
-        self.back_model = Axmodel(opt).cuda()
-        self.dmodel = Dmodel(opt).cuda()
+        # H: X x A -> U 
+        self.model      = Axmodel(opt)#.cuda()
+        
+        # P: Y x U -> A
+        self.back_model = Axmodel(opt)#.cuda()
+        
+        # discriminator. 
+        self.dmodel     = Dmodel(opt)#.cuda()
+        
         if self.opt.env == 'Walker2d-v2':
             net_init(self.model)
             net_init(self.back_model)
             net_init(self.dmodel)
 
-        self.criterionGAN = GANLoss().cuda()
+        self.criterionGAN = GANLoss()#.cuda()
         self.fake_pool = ImagePool(256)
         self.real_pool = ImagePool(256)
         self.weight_path = os.path.join(self.env_logs,
                 'model_{}_{}.pth'.format(opt.data_type1,opt.data_type2))
 
     def get_optim(self,lr):
-        optimizer_g = torch.optim.Adam([{'params': self.agent1.model.parameters(), 'lr': 0.0},
-                                      {'params': self.back_model.parameters(), 'lr': lr},
-                                      {'params': self.model.parameters(), 'lr': lr}])
+        """ return optimizers for geneator and discriminator. 
+        """
+        
+        # generator optimizer. 
+        optimizer_g = torch.optim.Adam([{'params': self.agent1.model.parameters(), 'lr': 0.0}, # dont train the fwd dynamics model. 
+                                        {'params': self.back_model.parameters(), 'lr': lr},
+                                        {'params': self.model.parameters(), 'lr': lr}])
+        
+        # discriminator optimizer. 
         self.optimizer_d = torch.optim.Adam(self.dmodel.parameters(),lr=lr)
+        
         return optimizer_g,self.optimizer_d
 
     def cal_gan(self,real_action,trans_action):
@@ -115,7 +138,10 @@ class ActionAgent:
         loss_fn = nn.L1Loss()
 
         print('----------initial test as baseline--------------')
-        ref_reward = self.agent2.dataset.online_test(lambda x,y:y,10)
+        # print("line 131: y: ", y)
+        
+        # rolls out trajectories and collects rewards in the tgt environment.
+        ref_reward = self.agent2.dataset.online_test(lambda x,y: y, 10) # <- what a weird piece of code. 
 
         ours,baseline = [],[]
         self.opt.istrain = True
@@ -157,6 +183,7 @@ class ActionAgent:
                     optimizer_g.step()
                 epoch_loss += loss_cycle.item()
                 cmp_loss += loss_back.item()
+            
             print('epoch:{} cycle_loss:{:.3f}  back_loss:{:.3f}'
                   .format(epoch, epoch_loss / self.opt.pair_n, cmp_loss / self.opt.pair_n))
 
@@ -208,7 +235,7 @@ if __name__ == '__main__':
     opt.epoch_n = 30
     # opt.data_id1 = 4
     # opt.data_id2 = 4
-    opt.data_type2 = 'arma3'
+    opt.data_type2 = 'arma3' # half-cheetah with 3 limbs
     agent = ActionAgent(opt)
     agent.train_ax()
 

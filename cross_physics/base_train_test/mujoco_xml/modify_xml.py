@@ -1,4 +1,12 @@
+""" 
+*** 
+    this is a dangerous thing to do. 
+    
+    Modifies default xml file and does not change it back. 
 
+    Can't we init mujoco envs with custom xmls ? 
+
+"""
 
 import os
 import sys
@@ -16,7 +24,7 @@ def modify(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--lib_path',default='site-packages/gym/envs/mujoco/assets')
+    parser.add_argument('--lib_path',default='gym/envs/mujoco/assets')
     parser.add_argument('--local_path',default='./assets')
     parser.add_argument('--env',default='half_cheetah')
     parser.add_argument('--phy',default='arma3')
