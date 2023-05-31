@@ -5,7 +5,7 @@ import torch
 import random
 import argparse
 import numpy as np
-from tqdm import tqdm
+import tqdm
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -46,7 +46,7 @@ class TD3(object):
         state = torch.FloatTensor(state.reshape(1, -1))#.cuda()
         
         # self.actor(state) produces an action according to the policy. 
-        
+
         action = axmodel(state, self.actor(state)).cpu().data.numpy().flatten()
         
         return action
@@ -134,7 +134,7 @@ class CycleData:
 
     def collect(self, data_id): # data_id unused. see opt.data_id instead
         """" collect data according to policy and store 
-        them in numpy arrays. Also returns. 
+        them in numpy arrays and returns them. 
         3 numpy  arrays: current states, actions, next states. 
         """
         
@@ -154,7 +154,7 @@ class CycleData:
             if not self.opt.force:
                 return (now_obs, action, nxt_obs)
         except:
-            print('start to create data')
+            print(f'start to create data. Rolling out {self.episode_n} episodes.')
 
         now_buffer, action_buffer, nxt_buffer = [], [], []
         episode_r = 0.
@@ -273,8 +273,8 @@ class CycleData:
         """ rolls out  trajectories/episodes and collects rewards. 
         Optionally, saves image frames as well. 
         """
-        print("axmodel: ", axmodel)
-        print(str(axmodel))
+        # print("axmodel: ", axmodel)
+        # print(str(axmodel))
         # what is this axmodel ? 
         save_flag = False
         
@@ -286,7 +286,7 @@ class CycleData:
         with torch.no_grad():
             now_buffer, action_buffer, nxt_buffer = [], [], []
             reward_buffer = []
-            for episode in (range(episode_n)):
+            for episode in tqdm.tqdm(range(episode_n)):
                 now_obs, action, nxt_obs = [], [], []
                 obs = self.env.reset()
                 done = False

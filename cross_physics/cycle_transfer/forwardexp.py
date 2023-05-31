@@ -10,7 +10,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import torch.utils.data as Data
 import matplotlib.pyplot as plt
-
+import tqdm 
 from collect_data import CycleData
 from models import Forwardmodel,Axmodel,Dmodel,GANLoss,ImagePool,net_init
 
@@ -41,6 +41,7 @@ class Agent():
     def __init__(self,opt):
         self.opt = opt
         self.dataset = CycleData(opt)
+        
         # the forward dynamics model. 
         self.model = self.dataset.model 
 
@@ -62,7 +63,6 @@ class ActionAgent:
         # trajectories & fwd models on modified data. 
         self.agent2 = Agent(opt)
         
-
         opt.state_dim = self.agent1.dataset.state_dim
         opt.action_dim = self.agent1.dataset.action_dim
         self.env_logs = self.agent1.dataset.env_logs
@@ -147,7 +147,7 @@ class ActionAgent:
         self.opt.istrain = True
         last_back_loss = 100.
         max_reward = 0.
-        for epoch in range(self.opt.epoch_n):
+        for epoch in tqdm.tqdm(range(self.opt.epoch_n)):
             epoch_loss, cmp_loss = 0, 0
             if self.opt.env == 'HalfCheetah-v2':
                 if epoch == 10:
@@ -187,11 +187,12 @@ class ActionAgent:
             print('epoch:{} cycle_loss:{:.3f}  back_loss:{:.3f}'
                   .format(epoch, epoch_loss / self.opt.pair_n, cmp_loss / self.opt.pair_n))
 
-            reward_ours = self.agent2.dataset.online_test(self.back_model,self.opt.eval_n)
+            reward_ours = self.agent2.dataset.online_test(self.back_model, 10)#self.opt.eval_n)
 
             if reward_ours.mean() > max_reward:
                 max_reward = reward_ours.mean()
                 torch.save(self.back_model.state_dict(), self.weight_path)
+            
             print('ours_cur:{:.2f}  ours_max:{:.2f}  ref_baseline:{:.2f}\n'
                   .format(reward_ours.mean(), max_reward, ref_reward.mean()))
 
@@ -215,8 +216,8 @@ if __name__ == '__main__':
     parser.add_argument('--episode_n', type=int, default=100, help='episode number')
     parser.add_argument('--state_dim', type=int, default=0, help='state dim')
     parser.add_argument('--action_dim', type=int, default=0, help='action dim')
-    parser.add_argument('--eval_n', type=int, default=100, help='evaluation episode number')
-    parser.add_argument('--epoch_n', type=int, default=30, help='training epoch number')
+    parser.add_argument('--eval_n', type=int, default=10, help='evaluation episode number')
+    parser.add_argument('--epoch_n', type=int, default=5, help='training epoch number')
 
     parser.add_argument('--data_type', type=str, default='base', help='data type')
     parser.add_argument('--data_type1', type=str, default='base', help='data type')

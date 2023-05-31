@@ -102,6 +102,7 @@ class TD3(object):
 
 
 	def train(self, replay_buffer, batch_size=100):
+		
 		self.total_it += 1
 
 		# Sample replay buffer 
