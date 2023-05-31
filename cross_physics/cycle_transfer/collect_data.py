@@ -81,9 +81,9 @@ class CycleData:
         print('-----------------------------------------------')
         self.sample_n1 = self.data1[0].shape[0]
         self.reset()
-
         opt.state_dim = self.state_dim
         opt.action_dim = self.action_dim
+        
         # initialize and train the forward model. 
         self.model = Forwardmodel(opt)#.cuda()
         self.train_forward()
@@ -135,7 +135,10 @@ class CycleData:
     def collect(self, data_id): # data_id unused. see opt.data_id instead
         """" collect data according to policy and store 
         them in numpy arrays and returns them. 
-        3 numpy  arrays: current states, actions, next states. 
+        returns: 
+        A tuple of length 4. 
+
+        4 numpy  arrays: current states, actions, rewards, next states. 
         """
         
         self.env_logs = safe_path(os.path.join(self.log_root,'{}_data'.format(self.opt.env)))
@@ -147,20 +150,22 @@ class CycleData:
         now_path = os.path.join(data_folder,'now.npy')
         nxt_path = os.path.join(data_folder,'nxt.npy')
         act_path = os.path.join(data_folder,'act.npy')
+        reward_path = os.path.join(data_folder,'rewards.npy')
         try: # check if previous data present. 
             now_obs = np.load(now_path)
             nxt_obs = np.load(nxt_path)
             action = np.load(act_path)
+            rewards = np.load(reward_path)
             if not self.opt.force:
-                return (now_obs, action, nxt_obs)
+                return (now_obs, action, rewards, nxt_obs)
         except:
             print(f'start to create data. Rolling out {self.episode_n} episodes.')
 
-        now_buffer, action_buffer, nxt_buffer = [], [], []
+        now_buffer, action_buffer, reward_buffer, nxt_buffer = [], [], [], []
         episode_r = 0.
         self.env.reset()
         for episode in tqdm(range(self.episode_n)):
-            now_obs, action, nxt_obs = [], [], []
+            now_obs, action, rwrd, nxt_obs = [], [], [], []
             obs, done = self.env.reset(), False
             done = False
             while not done:
@@ -173,21 +178,26 @@ class CycleData:
                 new_obs, r, done, info = self.env.step(act)
                 action.append(act)
                 nxt_obs.append(new_obs)
+                rwrd.append(r)
                 obs = new_obs
                 episode_r += r
             now_buffer.extend(now_obs)
             action_buffer.extend(action)
+            reward_buffer.extend(rwrd)
             nxt_buffer.extend(nxt_obs)
         print('average reward: {:.2f}'.format(episode_r/self.episode_n))
+        
         now_obs = np.stack(now_buffer)
         action = np.stack(action_buffer)
+        reward = np.stack(reward_buffer)
         nxt_obs = np.stack(nxt_buffer)
 
         np.save(now_path, now_obs)
         np.save(act_path, action)
+        np.save(reward_path, reward)
         np.save(nxt_path, nxt_obs)
 
-        return (now_obs, action, nxt_obs)
+        return (now_obs, action, reward, nxt_obs)
 
     def train_forward(self):
         """train a forward dynamics model. 
