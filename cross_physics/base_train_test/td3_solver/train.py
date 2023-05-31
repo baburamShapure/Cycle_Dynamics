@@ -5,12 +5,12 @@ import argparse
 import os
 import utils
 import TD3
+import pickle as pkl 
 
 def safe_path(path):
 	if not os.path.exists(path):
 		os.mkdir(path)
 	return path
-
 
 def eval_policy(policy, env_name, seed, eval_episodes=10):
 	""" Runs policy for X episodes and returns average reward
@@ -77,7 +77,6 @@ def main(args):
 
 	# Evaluate untrained policy
 	evaluations = [eval_policy(policy, args.env, args.seed)]
-
 	state, done = env.reset(), False
 	episode_reward = 0
 	episode_timesteps = 0
@@ -126,6 +125,13 @@ def main(args):
 			np.save(os.path.join(result_path, '{}'.format(file_name)), evaluations)
 			if args.save_model: policy.save(os.path.join(model_path, '{}'.format(file_name)))
 
+	print("Final step: Saving the replay buffer.")
+	print(f'Directory: {os.getcwd()}')
+	with open("replaybuffer", 'wb') as f:
+		pkl.dump(replay_buffer, f)
+		f.close()
+
+
 if __name__ == "__main__":
 	
 	parser = argparse.ArgumentParser()
@@ -134,7 +140,7 @@ if __name__ == "__main__":
 	parser.add_argument("--seed", default=0, type=int)              # Sets Gym, PyTorch and Numpy seeds
 	parser.add_argument("--start_timesteps", default=25e3, type=int)# Time steps initial random policy is used
 	parser.add_argument("--eval_freq", default=5e3, type=int)       # How often (time steps) we evaluate
-	parser.add_argument("--max_timesteps", default=1.7e5, type=int)   # Max time steps to run environment
+	parser.add_argument("--max_timesteps", default=1.7e5, type=int) # Max time steps to run environment
 	parser.add_argument("--expl_noise", default=0.1)                # Std of Gaussian exploration noise
 	parser.add_argument("--batch_size", default=256, type=int)      # Batch size for both actor and critic
 	parser.add_argument("--discount", default=0.99)                 # Discount factor
@@ -147,5 +153,4 @@ if __name__ == "__main__":
 
 	parser.add_argument("--log_root", default="../../../../logs/cross_physics")
 	args = parser.parse_args()
-
 	main(args)
